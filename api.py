@@ -1,16 +1,20 @@
 import pickle
 import requests
-from flask import Flask
+from flask import Flask,render_template
 from flask_restful import Api,Resource,reqparse,fields,marshal_with,abort
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 app=Flask(__name__)
 api=Api(app)
 
 movies = pickle.load(open('movies_list.pkl', 'rb'))
 similarity = pickle.load(open("similarity.pkl", 'rb'))
+api_key=os.getenv("API_KEY")
 
 def fetch_poster(movie_id):
-    url = f'https://api.themoviedb.org/3/movie/{movie_id}?api_key=7e4b636e12f4a8277173702840ec1afb&language=en-US'
+    url = f'https://api.themoviedb.org/3/movie/{movie_id}?api_key={api_key}'
     response = requests.get(url)
     data = response.json()
     if 'poster_path' in data and data['poster_path']:
@@ -37,48 +41,33 @@ def recommend(movie_name):
 user_args = reqparse.RequestParser()
 user_args.add_argument("movie",type=str,required=True,help="Movie name cannot be blank")
 
-user_fields = {"mvoies_list":fields.Nested({
-    'movie_1': fields.String,
-    'movie_2': fields.String,
-    'movie_3': fields.String,
-    'movie_4': fields.String,
-    'movie_5': fields.String
-    }),
-    "movies_poster_links":fields.Nested({
-        'movie_1': fields.String,
-        'movie_2': fields.String,
-        'movie_3': fields.String,
-        'movie_4': fields.String,
-        'movie_5': fields.String
-    })
+user_fields = {
+    "movies_list": fields.List(fields.Nested({
+        'movie_name': fields.String,
+        'poster_link': fields.String 
+    }))
 }
 
 class User(Resource):
     @marshal_with(user_fields)
     def post(self):
         args=user_args.parse_args() 
-        movie_list,movie_poster=recommend(movie_name=args["movie"].title())
+        movie_name=args["movie"].title()
+        movie_list,movie_poster=recommend(movie_name)
         if not movie_list:
             abort(404,"no movie recommendations found")
-        return {"mvoies_list":{
-            'movie_1': movie_list[0],
-            'movie_2': movie_list[1],
-            'movie_3': movie_list[2],
-            'movie_4': movie_list[3],
-            'movie_5': movie_list[4]},
-            "movies_poster_links":{
-            'movie_1': movie_poster[0],
-            'movie_2': movie_poster[1],
-            'movie_3': movie_poster[2],
-            'movie_4': movie_poster[3],
-            'movie_5': movie_poster[4]}
+        return {"movies_list":[
+            {"movie_name":movie_list[0], "poster_link":movie_poster[0]},
+            {"movie_name":movie_list[1], "poster_link":movie_poster[1]},
+            {"movie_name":movie_list[2], "poster_link":movie_poster[2]},
+            {"movie_name":movie_list[3], "poster_link":movie_poster[3]},
+            {"movie_name":movie_list[4], "poster_link":movie_poster[4]}]
         }, 200
 
 api.add_resource(User,"/api/movie_list")
 
 @app.route("/")
 def home():
-    return "<h1>this is an flask application</h1>"
-
+    return render_template("index.html")
 if __name__=="__main__":
     app.run(debug=True)
